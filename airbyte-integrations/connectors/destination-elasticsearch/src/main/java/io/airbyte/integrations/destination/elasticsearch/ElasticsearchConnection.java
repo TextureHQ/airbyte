@@ -181,6 +181,13 @@ public class ElasticsearchConnection {
   // TODO: Can we do something like this?
   private String extractPrimaryKey(AirbyteRecordMessage doc, ElasticsearchWriteConfig config) {
     if (!config.hasPrimaryKey()) {
+      // Check for _id field if no primary key is configured
+      JsonPointer idPtr = JsonPointer.valueOf("/_id");
+      var idNode = doc.getData().at(idPtr);
+      if (!idNode.isMissingNode() && idNode.isValueNode()) {
+        log.debug("using _id field value for document id");
+        return idNode.asText();
+      }
       return UUID.randomUUID().toString();
     }
     var optFirst = config.getPrimaryKey().stream().findFirst();
@@ -196,7 +203,14 @@ public class ElasticsearchConnection {
         return pkNode.asText();
       }
     }
-    log.warn("unable to extract primary key");
+    log.warn("unable to extract primary key, checking for _id field");
+    // Check for _id field as fallback before random UUID
+    JsonPointer idPtr = JsonPointer.valueOf("/_id");
+    var idNode = doc.getData().at(idPtr);
+    if (!idNode.isMissingNode() && idNode.isValueNode()) {
+      log.debug("using _id field value for document id as fallback");
+      return idNode.asText();
+    }
     return UUID.randomUUID().toString();
   }
 
